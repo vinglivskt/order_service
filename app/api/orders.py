@@ -29,6 +29,7 @@ async def create_order(
     current_user: Annotated[User, Depends(get_current_user)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
+    """Создаёт новый заказ."""
     order_service = OrderService(db)
     order = await order_service.create_order(current_user.id, payload)
 
@@ -56,6 +57,7 @@ async def get_order(
     current_user: Annotated[User, Depends(get_current_user)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
+    """Получает заказ по `order_id`."""
     cache_service = CacheService(redis)
     cached = await cache_service.get_order(str(order_id))
     if cached:
@@ -85,6 +87,7 @@ async def update_order_status(
     current_user: Annotated[User, Depends(get_current_user)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
+    """Обновляет статус заказа."""
     order_service = OrderService(db)
     order = await order_service.get_order_by_id(order_id)
     if not order:
@@ -109,6 +112,7 @@ async def get_orders_by_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> list[SOrderRead]:
+    """Получает список заказов пользователя."""
     if current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 

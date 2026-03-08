@@ -52,12 +52,16 @@ app.add_middleware(
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Обработчик ошибки RateLimitExceeded."""
+
     return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
 
 
 @app.get("/health", tags=["health"])
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def health(request: Request):
+    """Проверка работоспособности сервиса."""
+
     return {"status": "ok"}
 
 

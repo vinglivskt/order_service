@@ -6,6 +6,8 @@ from app.core.config import settings
 
 
 class KafkaProducerService:
+    """Сервис для отправки сообщений в Kafka."""
+
     def __init__(self) -> None:
         self._producer: AIOKafkaProducer | None = None
 

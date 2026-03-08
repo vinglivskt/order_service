@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 async def consume() -> None:
+    """Слушает Kafka топик на новые заказы и обрабатывает их."""
     consumer = AIOKafkaConsumer(
         settings.KAFKA_TOPIC_NEW_ORDER,
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,

@@ -11,6 +11,8 @@ from app.models.base import Base
 
 
 class OrderStatus(str, enum.Enum):
+    """Статусы заказа."""
+
     PENDING = "PENDING"
     PAID = "PAID"
     SHIPPED = "SHIPPED"
@@ -18,6 +20,8 @@ class OrderStatus(str, enum.Enum):
 
 
 class Order(Base):
+    """Заказ."""
+
     __tablename__ = "orders"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

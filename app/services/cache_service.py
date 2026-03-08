@@ -15,13 +15,18 @@ class CacheService:
         return f"order:{order_id}"
 
     async def get_order(self, order_id: str) -> dict[str, Any] | None:
+        """Получить заказ из кэша."""
         data = await self.redis.get(self.order_key(order_id))
         if not data:
             return None
         return json.loads(data)
 
     async def set_order(self, order_id: str, payload: dict[str, Any]) -> None:
-        await self.redis.set(self.order_key(order_id), json.dumps(payload, default=str), ex=settings.ORDERS_CACHE_TTL_SECONDS)
+        """Установить заказ в кэше."""
+        await self.redis.set(
+            self.order_key(order_id), json.dumps(payload, default=str), ex=settings.ORDERS_CACHE_TTL_SECONDS
+        )
 
     async def delete_order(self, order_id: str) -> None:
+        """Удалить заказ из кэша."""
         await self.redis.delete(self.order_key(order_id))
