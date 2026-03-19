@@ -1,4 +1,3 @@
-import secrets
 from functools import lru_cache
 from typing import List
 
@@ -15,26 +14,26 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    APP_NAME: str = "order-service"
-    DEBUG: bool = False
-    API_V1_PREFIX: str = "/api/v1"
+    APP_NAME: str
+    DEBUG: bool
+    API_V1_PREFIX: str
 
-    SECRET_KEY: str = secrets.token_urlsafe(32)
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    ALGORITHM: str = "HS256"
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    ALGORITHM: str
 
     DATABASE_URL: str
     REDIS_URL: str
 
-    KAFKA_BOOTSTRAP_SERVERS: str = "kafka:9092"
-    KAFKA_TOPIC_NEW_ORDER: str = "new-order"
+    KAFKA_BOOTSTRAP_SERVERS: str
+    KAFKA_TOPIC_NEW_ORDER: str
 
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
 
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
-    RATE_LIMIT_DEFAULT: str = "100/minute"
-    ORDERS_CACHE_TTL_SECONDS: int = 300
+    CORS_ORIGINS: List[str]
+    RATE_LIMIT_DEFAULT: str
+    ORDERS_CACHE_TTL_SECONDS: int
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
