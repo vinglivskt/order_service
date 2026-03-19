@@ -30,8 +30,6 @@ async def lifespan(app: FastAPI):
     await app.state.redis.close()
 
 
-app = FastAPI(lifespan=lifespan)
-
 app = FastAPI(
     title="Order Service",
     version="1.0.0",
