@@ -54,6 +54,7 @@ async def prepare_database() -> AsyncGenerator[None, None]:
 
     async with engine_test.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
     await engine_test.dispose()
 
