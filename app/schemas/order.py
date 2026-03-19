@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -33,7 +32,7 @@ class SOrderRead(BaseModel):
 
     id: UUID
     user_id: int
-    items: list[dict[str, Any]]
+    items: list[SOrderItem]
     total_price: float
     status: OrderStatus
     created_at: datetime
