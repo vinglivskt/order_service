@@ -18,7 +18,7 @@ async def consume() -> None:
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
         group_id="order-service-consumer-group",
         auto_offset_reset="earliest",
-        enable_auto_commit=True,
+        enable_auto_commit=False,
         value_deserializer=lambda m: json.loads(m.decode("utf-8")),
     )
 
@@ -33,6 +33,7 @@ async def consume() -> None:
             order_id = payload["order_id"]
 
             process_order.delay(order_id)
+            await consumer.commit()
     finally:
         await consumer.stop()
         logger.info("Kafka consumer stopped")
