@@ -204,14 +204,13 @@ Bearer <access_token>
 
 {  
  "items": [
- {
- "sku": "SKU-001",
- "name": "Product 1",
- "qty": 2,
- "price": 100
- }
- ],  
- "total_price": 200  
+{
+"sku": "SKU-001",
+"name": "Product 1",
+"qty": 2,
+"price": 100
+}
+],  
 }
 
 Ожидаемый результат:

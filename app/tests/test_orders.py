@@ -30,8 +30,7 @@ async def create_order(client, token: str):
                 "qty": 2,
                 "price": 100,
             }
-        ],
-        "total_price": 200,
+        ]
     }
 
     response = await client.post(
@@ -57,8 +56,7 @@ async def test_create_order(client):
                     "qty": 1,
                     "price": 50,
                 }
-            ],
-            "total_price": 50,
+            ]
         },
         headers=auth_headers(token),
     )
@@ -86,6 +84,7 @@ async def test_get_order_by_id(client):
 
     assert data["id"] == created["id"]
     assert data["user_id"] == created["user_id"]
+    assert data["total_price"] == 200
 
 
 async def test_update_order_status(client):
@@ -103,6 +102,7 @@ async def test_update_order_status(client):
 
     assert data["id"] == created["id"]
     assert data["status"] == "PAID"
+    assert data["total_price"] == 200
 
 
 async def test_get_orders_by_user(client):
@@ -121,6 +121,7 @@ async def test_get_orders_by_user(client):
     assert isinstance(data, list)
     assert len(data) == 2
     assert all(order["user_id"] == 1 for order in data)
+    assert all(order["total_price"] == 200 for order in data)
 
 
 async def test_get_nonexistent_order_returns_404(client):
