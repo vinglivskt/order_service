@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +37,33 @@ class OrderService:
         result = await self.db.execute(select(Order).where(Order.id == order_id))
         return result.scalar_one_or_none()
 
-    async def update_status(self, order: Order, status: OrderStatus) -> Order:
-        """Обновить статус заказа."""
-        order.status = status
+    async def update_status(self, order: Order, new_status: OrderStatus) -> Order:
+        """Обновить статус заказа с проверкой допустимых переходов."""
+        current_status = order.status
+
+        # Определяем допустимые переходы
+        allowed_transitions = {
+            OrderStatus.PENDING: [OrderStatus.PAID, OrderStatus.CANCELED],
+            OrderStatus.PAID: [OrderStatus.SHIPPED, OrderStatus.CANCELED],
+            OrderStatus.SHIPPED: [],
+            OrderStatus.CANCELED: [],
+        }
+
+        # Проверяем, является ли текущий статус конечным
+        if current_status in [OrderStatus.SHIPPED, OrderStatus.CANCELED]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Невозможно изменить статус заказа из '{current_status.value}'",
+            )
+
+        # Проверяем, допустим ли переход
+        if new_status not in allowed_transitions.get(current_status, []):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Недопустимый переход статуса из '{current_status.value}' в '{new_status.value}'",
+            )
+
+        order.status = new_status
         await self.db.commit()
         await self.db.refresh(order)
         return order
