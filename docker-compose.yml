@@ -110,6 +110,19 @@ services:
     networks:
       - app-network
 
+  adminer:
+    image: adminer:5.4.0
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    environment:
+      - TZ=Europe/Moscow
+      - ADMINER_DESIGN=pepa-linha-dark
   redis:
     image: redis:7-alpine
     container_name: order_service_redis
