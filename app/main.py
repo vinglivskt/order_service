@@ -12,8 +12,8 @@ from app.api.auth import router as auth_router
 from app.api.orders import router as orders_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.messaging.producer import KafkaProducerService
 from app.messaging.outbox_publisher import OutboxPublisherService
+from app.messaging.producer import KafkaProducerService
 
 
 @asynccontextmanager
@@ -27,8 +27,9 @@ async def lifespan(app: FastAPI):
     app.state.kafka_producer = kafka_producer
     outbox_task: asyncio.Task | None = None
 
-    outbox_publisher = OutboxPublisherService(kafka_producer)
-    outbox_task = asyncio.create_task(outbox_publisher.run())
+    if settings.ENABLE_OUTBOX_PUBLISHER:
+        outbox_publisher = OutboxPublisherService(kafka_producer)
+        outbox_task = asyncio.create_task(outbox_publisher.run())
 
     yield
 
