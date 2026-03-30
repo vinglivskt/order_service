@@ -1,9 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.order import OrderStatus
+from app.domain.orders.enums import OrderStatus
 
 
 class SOrderItem(BaseModel):
@@ -13,6 +13,8 @@ class SOrderItem(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     qty: int = Field(ge=1)
     price: float = Field(gt=0)
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SOrderCreate(BaseModel):
@@ -42,4 +44,4 @@ class SOrderRead(BaseModel):
     def round_total(cls, value: float) -> float:
         return round(value, 2)
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)

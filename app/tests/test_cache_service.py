@@ -1,30 +1,27 @@
+from uuid import uuid4
+
 import pytest
 from redis.asyncio import Redis
 
-from app.services.cache_service import CacheService
+from app.infrastructure.cache.order_cache import RedisOrderCache
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_cache_set_and_get_order():
     redis = Redis.from_url("redis://redis:6379/15", decode_responses=True)
-    service = CacheService(redis)
+    cache = RedisOrderCache(redis)
 
-    order_id = "test-order-id"
+    order_id = uuid4()
     payload = {
-        "id": order_id,
+        "id": str(order_id),
         "user_id": 1,
         "status": "PENDING",
     }
 
     await redis.flushdb()
-    await service.set_order(order_id, payload)
 
-    cached = await service.get_order(order_id)
+    await cache.set(order_id, payload)
+    cached = await cache.get(order_id)
 
-    assert cached is not None
-    assert cached["id"] == order_id
-    assert cached["status"] == "PENDING"
-
-    await redis.flushdb()
-    await redis.close()
+    assert cached == payload

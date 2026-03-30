@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
             await outbox_task
 
     await kafka_producer.stop()
-    await app.state.redis.close()
+    await app.state.redis.aclose()
 
 
 app = FastAPI(

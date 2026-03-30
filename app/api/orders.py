@@ -6,18 +6,33 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.application.orders.service import OrderApplicationService
 from app.core.rate_limit import limiter
 from app.db.session import get_db
+from app.domain.orders.exceptions import (
+    FinalOrderStatusError,
+    InvalidOrderStatusTransitionError,
+    OrderAccessDeniedError,
+    OrderNotFoundError,
+)
+from app.infrastructure.cache.order_cache import RedisOrderCache
+from app.infrastructure.db.repositories.order_repository import SQLAlchemyOrderRepository
 from app.models.user import User
 from app.schemas.order import SOrderCreate, SOrderRead, SOrderUpdateStatus
-from app.services.cache_service import CacheService
-from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
 async def get_redis(request: Request) -> Redis:
     return request.app.state.redis
+
+
+def get_order_application_service(
+    db: AsyncSession,
+) -> OrderApplicationService:
+    return OrderApplicationService(
+        order_repository=SQLAlchemyOrderRepository(db),
+    )
 
 
 @router.post("/", response_model=SOrderRead, status_code=status.HTTP_201_CREATED)
@@ -29,14 +44,29 @@ async def create_order(
     current_user: Annotated[User, Depends(get_current_user)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
-    """Создаёт новый заказ."""
-    # `request` используется SlowAPI для rate limiting.
-    order_service = OrderService(db)
-    order = await order_service.create_order(current_user.id, payload)
+    app_service = get_order_application_service(db)
+    order = await app_service.create_order(current_user.id, payload)
 
-    order_schema = SOrderRead.model_validate(order)
-    cache_service = CacheService(redis)
-    await cache_service.set_order(str(order.id), order_schema.model_dump(mode="json"))
+    order_schema = SOrderRead.model_validate(
+        {
+            "id": order.id,
+            "user_id": order.user_id,
+            "items": [
+                {
+                    "sku": item.sku,
+                    "name": item.name,
+                    "qty": item.qty,
+                    "price": item.price,
+                }
+                for item in order.items
+            ],
+            "total_price": order.total_price,
+            "status": order.status,
+            "created_at": order.created_at,
+        }
+    )
+    cache = RedisOrderCache(redis)
+    await cache.set(order.id, order_schema.model_dump(mode="json"))
 
     return order_schema
 
@@ -50,30 +80,50 @@ async def get_order(
     current_user: Annotated[User, Depends(get_current_user)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
-    """Получает заказ по `order_id`."""
-    cache_service = CacheService(redis)
-    cached = await cache_service.get_order(str(order_id))
+    cache = RedisOrderCache(redis)
+    cached = await cache.get(order_id)
     if cached:
         if int(cached["user_id"]) != current_user.id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
             )
         return SOrderRead.model_validate(cached)
 
-    order_service = OrderService(db)
-    order = await order_service.get_order_by_id(order_id)
-    if not order:
+    app_service = get_order_application_service(db)
+    try:
+        order = await app_service.get_order(order_id, current_user.id)
+    except OrderNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
-        )
-    if order.user_id != current_user.id:
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        ) from exc
+    except OrderAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        ) from exc
 
-    payload = SOrderRead.model_validate(order)
-    await cache_service.set_order(str(order.id), payload.model_dump(mode="json"))
-    return payload
+    payload_schema = SOrderRead.model_validate(
+        {
+            "id": order.id,
+            "user_id": order.user_id,
+            "items": [
+                {
+                    "sku": item.sku,
+                    "name": item.name,
+                    "qty": item.qty,
+                    "price": item.price,
+                }
+                for item in order.items
+            ],
+            "total_price": order.total_price,
+            "status": order.status,
+            "created_at": order.created_at,
+        }
+    )
+    await cache.set(order.id, payload_schema.model_dump(mode="json"))
+    return payload_schema
 
 
 @router.patch("/{order_id}/", response_model=SOrderRead)
@@ -86,23 +136,50 @@ async def update_order_status(
     current_user: Annotated[User, Depends(get_current_user)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
-    """Обновляет статус заказа."""
-    order_service = OrderService(db)
-    order = await order_service.get_order_by_id(order_id)
-    if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+    app_service = get_order_application_service(db)
+    try:
+        order = await app_service.update_order_status(
+            order_id=order_id,
+            current_user_id=current_user.id,
+            new_status=payload.status,
         )
-    if order.user_id != current_user.id:
+    except OrderNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        ) from exc
+    except OrderAccessDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        ) from exc
+    except (FinalOrderStatusError, InvalidOrderStatusTransitionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
-    order = await order_service.update_status(order, payload.status)
-    order_schema = SOrderRead.model_validate(order)
+    order_schema = SOrderRead.model_validate(
+        {
+            "id": order.id,
+            "user_id": order.user_id,
+            "items": [
+                {
+                    "sku": item.sku,
+                    "name": item.name,
+                    "qty": item.qty,
+                    "price": item.price,
+                }
+                for item in order.items
+            ],
+            "total_price": order.total_price,
+            "status": order.status,
+            "created_at": order.created_at,
+        }
+    )
 
-    cache_service = CacheService(redis)
-    await cache_service.set_order(str(order.id), order_schema.model_dump(mode="json"))
+    cache = RedisOrderCache(redis)
+    await cache.set(order.id, order_schema.model_dump(mode="json"))
 
     return order_schema
 
@@ -115,12 +192,33 @@ async def get_orders_by_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> list[SOrderRead]:
-    """Получает список заказов пользователя."""
-    if current_user.id != user_id:
+    app_service = get_order_application_service(db)
+    try:
+        orders = await app_service.get_orders_by_user(user_id, current_user.id)
+    except OrderAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        ) from exc
 
-    order_service = OrderService(db)
-    orders = await order_service.get_orders_by_user_id(user_id)
-    return [SOrderRead.model_validate(order) for order in orders]
+    return [
+        SOrderRead.model_validate(
+            {
+                "id": order.id,
+                "user_id": order.user_id,
+                "items": [
+                    {
+                        "sku": item.sku,
+                        "name": item.name,
+                        "qty": item.qty,
+                        "price": item.price,
+                    }
+                    for item in order.items
+                ],
+                "total_price": order.total_price,
+                "status": order.status,
+                "created_at": order.created_at,
+            }
+        )
+        for order in orders
+    ]
