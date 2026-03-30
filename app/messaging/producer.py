@@ -15,6 +15,7 @@ class KafkaProducerService:
         self._producer = AIOKafkaProducer(
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            transactional_id="order-service-producer",  # Добавляем transactional_id
         )
         await self._producer.start()
 
@@ -26,10 +27,11 @@ class KafkaProducerService:
         if not self._producer:
             raise RuntimeError("Kafka producer is not started")
 
-        await self._producer.send_and_wait(
-            settings.KAFKA_TOPIC_NEW_ORDER,
-            payload,
-        )
+        async with self._producer.transaction():  # Используем транзакцию
+            await self._producer.send_and_wait(
+                settings.KAFKA_TOPIC_NEW_ORDER,
+                payload,
+            )
 
 
 kafka_producer = KafkaProducerService()

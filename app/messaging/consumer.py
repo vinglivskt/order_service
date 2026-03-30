@@ -5,6 +5,7 @@ import logging
 from aiokafka import AIOKafkaConsumer
 
 from app.core.config import settings
+from app.messaging.producer import KafkaProducerService
 from app.tasks.order_tasks import process_order
 
 logging.basicConfig(level=logging.INFO)
@@ -27,13 +28,31 @@ async def consume() -> None:
 
     try:
         async for message in consumer:
-            payload = message.value
-            logger.info("Received message: %s", payload)
+            try:
+                payload = message.value
+                logger.info("Received message: %s", payload)
 
-            order_id = payload["order_id"]
+                if not payload or not isinstance(payload, dict):
+                    logger.warning("Invalid payload, skipping: %s", payload)
+                    continue
 
-            process_order.delay(order_id)
-            await consumer.commit()
+                message_id = payload.get("message_id")
+                if not message_id:
+                    logger.warning("Message missing ID, skipping: %s", payload)
+                    continue
+
+                order_id = payload["order_id"]
+                process_order(order_id)
+
+                await consumer.commit()
+            except Exception as exc:
+                logger.exception("Ошибка обработки сообщения: %s", exc)
+                producer = KafkaProducerService()
+                await producer.start()
+                await producer.send_new_order({"original_payload": message.value, "error": str(exc)})
+                await producer.stop()
+    except Exception as consume_error:
+        logger.exception("Critical error in consumer loop: %s", consume_error)
     finally:
         await consumer.stop()
         logger.info("Kafka consumer stopped")

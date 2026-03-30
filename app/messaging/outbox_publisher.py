@@ -12,14 +12,17 @@ logger = logging.getLogger(__name__)
 
 
 class OutboxPublisherService:
+    async def send_to_dlq(self, payload: dict) -> None:
+        """Send message to Dead Letter Queue."""
+        logger.warning("Sending message to DLQ: %s", payload)
+        await self._kafka_producer.send_new_order(payload)
+
     """Слушает очередь outbox и публикует события в Kafka."""
 
     def __init__(self, kafka_producer: KafkaProducerService) -> None:
         self._kafka_producer = kafka_producer
 
-    async def run(
-        self, poll_interval_seconds: float = 1.0, batch_size: int = 10
-    ) -> None:
+    async def run(self, poll_interval_seconds: float = 1.0, batch_size: int = 10) -> None:
         while True:
             try:
                 await self.publish_pending(batch_size=batch_size)
@@ -60,10 +63,13 @@ class OutboxPublisherService:
 
                         # Задержка для повторной попытки.
                         delay_seconds = min(60, 2**event.attempts)
-                        event.next_attempt_at = datetime.now(timezone.utc) + timedelta(
-                            seconds=delay_seconds
-                        )
-                        continue
+                        event.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+                        # Отправляем событие в DLQ после нескольких неудачных попыток
+                        if event.attempts >= 5:
+                            await self.send_to_dlq(event.payload)
+                            event.status = OutboxStatus("FAILED")
+                        else:
+                            continue
 
                     event.status = OutboxStatus.SENT
                     event.last_error = None
