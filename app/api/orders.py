@@ -30,20 +30,13 @@ async def create_order(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> SOrderRead:
     """Создаёт новый заказ."""
+    # `request` используется SlowAPI для rate limiting.
     order_service = OrderService(db)
     order = await order_service.create_order(current_user.id, payload)
 
     order_schema = SOrderRead.model_validate(order)
     cache_service = CacheService(redis)
     await cache_service.set_order(str(order.id), order_schema.model_dump(mode="json"))
-
-    await request.app.state.kafka_producer.send_new_order(
-        {
-            "event": "new-order",
-            "order_id": str(order.id),
-            "user_id": current_user.id,
-        }
-    )
 
     return order_schema
 
@@ -62,15 +55,21 @@ async def get_order(
     cached = await cache_service.get_order(str(order_id))
     if cached:
         if int(cached["user_id"]) != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+            )
         return SOrderRead.model_validate(cached)
 
     order_service = OrderService(db)
     order = await order_service.get_order_by_id(order_id)
     if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
     if order.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
     payload = SOrderRead.model_validate(order)
     await cache_service.set_order(str(order.id), payload.model_dump(mode="json"))
@@ -91,9 +90,13 @@ async def update_order_status(
     order_service = OrderService(db)
     order = await order_service.get_order_by_id(order_id)
     if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
     if order.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
     order = await order_service.update_status(order, payload.status)
     order_schema = SOrderRead.model_validate(order)
@@ -114,7 +117,9 @@ async def get_orders_by_user(
 ) -> list[SOrderRead]:
     """Получает список заказов пользователя."""
     if current_user.id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
     order_service = OrderService(db)
     orders = await order_service.get_orders_by_user_id(user_id)

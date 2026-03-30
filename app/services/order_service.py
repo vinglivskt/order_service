@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order, OrderStatus
+from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.schemas.order import SOrderCreate
 
 
@@ -24,10 +25,28 @@ class OrderService:
         order = Order(
             user_id=user_id,
             items=[item.model_dump() for item in payload.items],
-            total_price=self.calculate_total([item.model_dump() for item in payload.items]),
+            total_price=self.calculate_total(
+                [item.model_dump() for item in payload.items]
+            ),
             status=OrderStatus.PENDING,
         )
         self.db.add(order)
+
+        # Пишем событие в outbox в рамках той же транзакции БД.
+        # Это предотвращает потерю события, если Kafka временно недоступна.
+        self.db.add(
+            OutboxEvent(
+                event_type="new-order",
+                payload={
+                    "event": "new-order",
+                    "order_id": str(order.id),
+                    "user_id": user_id,
+                },
+                # Явное значение поддерживает предсказуемость вставки даже без server default.
+                status=OutboxStatus.PENDING,
+            )
+        )
+
         await self.db.commit()
         await self.db.refresh(order)
         return order
@@ -70,5 +89,9 @@ class OrderService:
 
     async def get_orders_by_user_id(self, user_id: int) -> list[Order]:
         """Получить все заказы пользователя по его идентификатору."""
-        result = await self.db.execute(select(Order).where(Order.user_id == user_id).order_by(Order.created_at.desc()))
+        result = await self.db.execute(
+            select(Order)
+            .where(Order.user_id == user_id)
+            .order_by(Order.created_at.desc())
+        )
         return list(result.scalars().all())

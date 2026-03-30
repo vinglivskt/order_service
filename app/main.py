@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from app.api.orders import router as orders_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.messaging.producer import KafkaProducerService
+from app.messaging.outbox_publisher import OutboxPublisherService
 
 
 @asynccontextmanager
@@ -23,8 +25,17 @@ async def lifespan(app: FastAPI):
     kafka_producer = KafkaProducerService()
     await kafka_producer.start()
     app.state.kafka_producer = kafka_producer
+    outbox_task: asyncio.Task | None = None
+
+    outbox_publisher = OutboxPublisherService(kafka_producer)
+    outbox_task = asyncio.create_task(outbox_publisher.run())
 
     yield
+
+    if outbox_task:
+        outbox_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await outbox_task
 
     await kafka_producer.stop()
     await app.state.redis.close()

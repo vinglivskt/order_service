@@ -24,7 +24,9 @@ class CacheService:
     async def set_order(self, order_id: str, payload: dict[str, Any]) -> None:
         """Установить заказ в кэше."""
         await self.redis.set(
-            self.order_key(order_id), json.dumps(payload, default=str), ex=settings.ORDERS_CACHE_TTL_SECONDS
+            self.order_key(order_id),
+            json.dumps(payload, default=str),
+            ex=settings.ORDERS_CACHE_TTL_SECONDS,
         )
 
     async def delete_order(self, order_id: str) -> None:
