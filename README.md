@@ -360,6 +360,7 @@ docker compose logs -f kafka
 ---
 ## Observability (минимум)
 
+- Контекст запроса и structured logging: пакет `app/observability/` (`log_context`, `structured_logging`). Метрики Prometheus: `app/core/monitoring.py`, экспорт — `GET /metrics` в `app/main.py`.
 - Структурированные JSON-логи включают поля `timestamp`, `level`, `service`, `request_id`, `correlation_id`, `event_id`, `order_id`, `user_id`.
 - Middleware прокидывает `X-Request-Id` и `X-Correlation-Id` (если они валидны UUID) и возвращает `X-Request-Id` в ответе.
 - Трассировка идёт по цепочке `HTTP -> outbox_event -> Kafka -> consumer -> Celery task`.

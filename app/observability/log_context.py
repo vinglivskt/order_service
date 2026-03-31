@@ -1,6 +1,5 @@
 import uuid
 from contextvars import ContextVar
-from typing import Optional
 
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -52,7 +51,6 @@ def clear_context() -> None:
     event_id_var.set(None)
     order_id_var.set(None)
     user_id_var.set(None)
-    # service_var не сбрасываем: он задается на уровне процесса.
 
 
 def get_context() -> dict[str, str | None]:
@@ -74,4 +72,3 @@ def ensure_uuid_str(value: str | None) -> str | None:
         return str(uuid.UUID(value))
     except Exception:
         return None
-

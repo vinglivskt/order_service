@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from app.core.log_context import get_context, set_service
+from app.observability.log_context import get_context, set_service
 
 
 class JsonLogFormatter(logging.Formatter):
@@ -24,12 +24,37 @@ class JsonLogFormatter(logging.Formatter):
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
 
-        # Добавим любые extra-поля, если они пришли в record.__dict__
-        # (например, из logger.warning(..., extra={...})).
-        reserved = set(payload.keys()) | {"args", "asctime", "created", "exc_info", "exc_text", "filename", "funcName", "levelname",
-                                         "levelno", "lineno", "module", "msecs", "message", "msg", "name", "pathname", "process", "processName",
-                                         "relativeCreated", "root", "request_id", "correlation_id", "event_id", "order_id", "user_id", "service", "thread",
-                                         "threadName", "taskName"}
+        reserved = set(payload.keys()) | {
+            "args",
+            "asctime",
+            "created",
+            "exc_info",
+            "exc_text",
+            "filename",
+            "funcName",
+            "levelname",
+            "levelno",
+            "lineno",
+            "module",
+            "msecs",
+            "message",
+            "msg",
+            "name",
+            "pathname",
+            "process",
+            "processName",
+            "relativeCreated",
+            "root",
+            "request_id",
+            "correlation_id",
+            "event_id",
+            "order_id",
+            "user_id",
+            "service",
+            "thread",
+            "threadName",
+            "taskName",
+        }
         for k, v in record.__dict__.items():
             if k in reserved or k.startswith("_"):
                 continue
@@ -49,4 +74,3 @@ def setup_structured_logging(*, service: str, level: int = logging.INFO) -> None
         handler = logging.StreamHandler()
         handler.setFormatter(JsonLogFormatter())
         root.addHandler(handler)
-

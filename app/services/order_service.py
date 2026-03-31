@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.log_context import get_context, set_event_context
+from app.observability.log_context import get_context, set_event_context
 from app.models.order import Order, OrderStatus
 from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.schemas.order import SOrderCreate

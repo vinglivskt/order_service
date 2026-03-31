@@ -23,8 +23,8 @@ from app.core.monitoring import (
     HTTP_REQUESTS_LATENCY,
 )
 from app.core.rate_limit import limiter
-from app.core.log_context import clear_context, ensure_uuid_str, set_request_context
-from app.core.structured_logging import setup_structured_logging
+from app.observability.log_context import clear_context, ensure_uuid_str, set_request_context
+from app.observability.structured_logging import setup_structured_logging
 from app.db.session import AsyncSessionLocal
 from app.messaging.outbox_publisher import OutboxPublisherService
 from app.messaging.producer import KafkaProducerService

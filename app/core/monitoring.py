@@ -1,8 +1,6 @@
-import uvicorn
-from fastapi import FastAPI
-from prometheus_client import Counter, Gauge, Histogram, generate_latest
+"""Prometheus-метрики (единая точка регистрации). Экспорт — через GET /metrics в app.main."""
 
-app = FastAPI()
+from prometheus_client import Counter, Gauge, Histogram
 
 # Метрики для DLQ
 DLQ_METRICS = {
@@ -17,8 +15,6 @@ DLQ_METRICS = {
     ),
 }
 
-
-# HTTP метрики (используются в app/main.py)
 HTTP_REQUESTS_COUNT = Counter(
     "http_requests_total",
     "Общее количество HTTP-запросов",
@@ -30,8 +26,6 @@ HTTP_REQUESTS_LATENCY = Histogram(
     ["method", "path", "status"],
 )
 
-
-# Kafka метрики
 KAFKA_PUBLISHED_TOTAL = Counter(
     "kafka_published_total",
     "Количество опубликованных сообщений в Kafka",
@@ -43,15 +37,11 @@ KAFKA_CONSUMED_TOTAL = Counter(
     ["topic"],
 )
 
-
-# Outbox метрики
 OUTBOX_PENDING_EVENTS = Gauge(
     "outbox_pending_events",
     "Количество outbox-событий, ожидающих публикации (в текущем батче publisher-а)",
 )
 
-
-# Celery метрики
 CELERY_TASK_SUCCESS_TOTAL = Counter(
     "celery_task_success_total",
     "Успешные Celery задачи",
@@ -63,8 +53,6 @@ CELERY_TASK_FAILURE_TOTAL = Counter(
     ["task_name"],
 )
 
-
-# Cache метрики
 CACHE_HIT_TOTAL = Counter(
     "cache_hit_total",
     "Cache hits",
@@ -73,13 +61,3 @@ CACHE_MISS_TOTAL = Counter(
     "cache_miss_total",
     "Cache misses",
 )
-
-
-@app.get("/metrics")
-async def metrics():
-    """Экспортировать метрики Prometheus."""
-    return generate_latest()
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)

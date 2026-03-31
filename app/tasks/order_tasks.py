@@ -2,12 +2,12 @@ import time
 import logging
 
 from app.tasks.celery_app import celery_app
-from app.core.log_context import clear_context, set_event_context
+from app.observability.log_context import clear_context, set_event_context
 from app.core.monitoring import (
     CELERY_TASK_FAILURE_TOTAL,
     CELERY_TASK_SUCCESS_TOTAL,
 )
-from app.core.structured_logging import setup_structured_logging
+from app.observability.structured_logging import setup_structured_logging
 
 setup_structured_logging(service="celery_worker")
 

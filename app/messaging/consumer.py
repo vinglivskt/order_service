@@ -9,12 +9,12 @@ from aiokafka import AIOKafkaConsumer
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
-from app.db.session import AsyncSessionLocal
-from app.core.log_context import clear_context, set_event_context
+from app.observability.log_context import clear_context, set_event_context
 from app.core.monitoring import KAFKA_CONSUMED_TOTAL
+from app.observability.structured_logging import setup_structured_logging
+from app.db.session import AsyncSessionLocal
 from app.messaging.producer import KafkaProducerService
 from app.models.processed_event import ProcessedEvent
-from app.core.structured_logging import setup_structured_logging
 from app.tasks.order_tasks import process_order
 
 logger = logging.getLogger(__name__)
@@ -111,9 +111,7 @@ async def consume() -> None:
 
     try:
         async for message in consumer:
-            message_key = (
-                f"{message.topic}:{message.partition}:{message.offset}"
-            )
+            message_key = f"{message.topic}:{message.partition}:{message.offset}"
 
             raw_bytes = message.value
             raw_text = raw_bytes.decode("utf-8", errors="replace")

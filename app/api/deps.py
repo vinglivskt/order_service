@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
-from app.core.log_context import set_request_context
+from app.observability.log_context import set_request_context
 from app.db.session import get_db
 from app.models.user import User
 

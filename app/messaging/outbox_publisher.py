@@ -6,12 +6,12 @@ from typing import Any
 from sqlalchemy import func, select
 
 from app.core.config import settings
-from app.core.log_context import clear_context, set_event_context
+from app.observability.log_context import clear_context, set_event_context
 from app.core.monitoring import OUTBOX_PENDING_EVENTS
 from app.db.session import AsyncSessionLocal
 from app.messaging.producer import KafkaProducerService
 from app.models.outbox_event import OutboxEvent, OutboxStatus
-from app.core.structured_logging import setup_structured_logging
+from app.observability.structured_logging import setup_structured_logging
 
 logger = logging.getLogger(__name__)
 
