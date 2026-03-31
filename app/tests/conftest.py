@@ -65,7 +65,9 @@ async def prepare_database() -> AsyncGenerator[None, None]:
 async def clean_tables() -> AsyncGenerator[None, None]:
     async with engine_test.begin() as conn:
         await conn.execute(
-            text("TRUNCATE TABLE orders, outbox_events, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE orders, outbox_events, processed_events, users RESTART IDENTITY CASCADE"
+            )
         )
 
     yield

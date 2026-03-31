@@ -9,9 +9,11 @@ def process_order(
     event_id: str | None = None,
     event_type: str | None = None,
     correlation_id: str | None = None,
+    request_id: str | None = None,
 ) -> None:
     """Обработать заказ."""
     time.sleep(2)
     print(
-        f"Order {order_id} processed (event_id={event_id}, event_type={event_type}, correlation_id={correlation_id})"
+        "Order "
+        f"{order_id} processed (event_id={event_id}, event_type={event_type}, correlation_id={correlation_id}, request_id={request_id})"
     )
