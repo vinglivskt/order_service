@@ -29,21 +29,26 @@
 - status (enum: PENDING, PAID, SHIPPED, CANCELED)
 - created_at (datetime)
 
-### 2.3 Очереди сообщений (Kafka / RabbitMQ)
+### 2.3 Очереди сообщений (Kafka + Outbox Pattern)
 
-- RabbitMQ/Kafka используется как брокер сообщений между сервисами (event-bus), а не как брокер Celery.
-- При создании заказа сервис публикует событие new_order в очередь.
-- Отдельный consumer (отдельный процесс/сервис) подписывается на очередь, получает сообщения new_order, выполняет обработку и запускает фоновую задачу в Celery/taskiq.
-- Celery/taskiq используется только для выполнения фоновых задач и не читает RabbitMQ/Kafka напрямую как event-bus.
+- Kafka используется как event-bus между сервисами (Celery не является брокером событий).
+- При создании заказа сервис записывает заказ и `OutboxEvent` в PostgreSQL в рамках одной транзакции (таблица `outbox_events`).
+- Фоновый `OutboxPublisherService` (запускается внутри `api` на lifespan, если `ENABLE_OUTBOX_PUBLISHER=true`) публикует события из `outbox_events` в Kafka topic `order-events`.
+- Publisher публикует только записи со `status=PENDING` и когда `next_attempt_at <= now()`.
+- После успешной отправки запись переводится в `status=SENT`.
+- При ошибке отправки Publisher увеличивает `attempts`, выставляет `next_attempt_at` по exponential backoff и повторяет попытку до `OUTBOX_MAX_ATTEMPTS`.
+- После исчерпания попыток Publisher отправляет данные события в DLQ topic `order-events-dlq` и переводит запись в `status=FAILED`.
+- Отдельный `consumer` подписывается на `order-events`, валидирует envelope и запускает Celery task `process_order` (передает как минимум `order_id` и `event_id`).
+- Невалидные сообщения (ошибки валидации envelope в `consumer`) отправляются в `order-events-dlq` с причиной.
 
 #### 2.4 Redis (Кеширование заказов)
 
 - Если заказ запрашивается повторно – отдавать его из кеша (TTL = 5 минут).
 - При изменении заказа – обновлять кеш.
 
-#### 2.5 Celery/taskiq (Фоновая обработка)
+#### 2.5 Celery (Фоновая обработка)
 
-- Фоновая задача обработки заказа (time.sleep(2) и print(f"Order {order_id} processed")).
+- Фоновая задача обработки заказа (в демо реализации: `time.sleep(2)` и `print(f"Order {order_id} processed")`).
 
 #### 2.6 Безопасность
 
@@ -56,7 +61,7 @@
 
 - Использование FastAPI с Pydantic.
 - Работа с PostgreSQL через SQLAlchemy + Alembic.
-- Асинхронное взаимодействие с Kafka / RabbitMQ.
+- Асинхронное взаимодействие с Kafka.
 - Docker Compose для развертывания всей инфраструктуры.
 - Код должен быть структурированным и документированным.
 
@@ -119,7 +124,7 @@ docker compose up --build
 Вместе с приложением запускаются следующие сервисы:
 
 - `api` — FastAPI приложение
-- `consumer` — Kafka consumer для обработки событий `new-order`
+- `consumer` — Kafka consumer для обработки событий `order-events`
 - `celery_worker` — Celery worker для фоновых задач
 - `postgres` — PostgreSQL
 - `redis` — Redis для кэширования и broker/result backend для Celery
@@ -218,7 +223,7 @@ Bearer <access_token>
 - создаётся заказ
 - заказ сохраняется в PostgreSQL
 - возвращается объект заказа со статусом `PENDING`
-- сервис публикует событие `new-order` в Kafka
+- сервис создает заказ и `OutboxEvent`; затем `OutboxPublisherService` публикует событие `order.created` в Kafka topic `order-events`
 
 ---
 
@@ -288,8 +293,9 @@ http://localhost:8070
 
 Там можно проверить:
 
-- наличие topic `new-order`
-- сообщения, публикуемые при создании заказа
+- наличие topic `order-events`
+- наличие topic `order-events-dlq`
+- сообщения, публикуемые при создании заказа (event `order.created`)
 - состояние consumer group
 
 ---
