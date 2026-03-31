@@ -10,12 +10,16 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
+from app.core.log_context import clear_context, set_event_context
+from app.core.monitoring import KAFKA_CONSUMED_TOTAL
 from app.messaging.producer import KafkaProducerService
 from app.models.processed_event import ProcessedEvent
+from app.core.structured_logging import setup_structured_logging
 from app.tasks.order_tasks import process_order
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+setup_structured_logging(service="consumer")
 
 
 def _now_isoformat() -> str:
@@ -113,6 +117,7 @@ async def consume() -> None:
 
             raw_bytes = message.value
             raw_text = raw_bytes.decode("utf-8", errors="replace")
+            KAFKA_CONSUMED_TOTAL.labels(topic=message.topic).inc()
 
             try:
                 envelope = json.loads(raw_text)
@@ -123,6 +128,13 @@ async def consume() -> None:
                 order_id = event["order_id"]
                 correlation_id = event["correlation_id"]
                 request_id = event["request_id"]
+
+                set_event_context(
+                    event_id=str(event_id),
+                    order_id=str(order_id),
+                    correlation_id=str(correlation_id) if correlation_id else None,
+                    request_id=str(request_id) if request_id else None,
+                )
 
                 async with AsyncSessionLocal() as session:
                     inserted = False
@@ -152,7 +164,9 @@ async def consume() -> None:
                             )
 
                 # Коммит делаем только после успешной фиксации идемпотентности (и enqueue для новых).
+                logger.info("Message consumed and committed", extra={"event_type": event_type})
                 await consumer.commit()
+                clear_context()
             except (json.JSONDecodeError, ValueError) as exc:
                 logger.warning("Poison/invalid event, sending to DLQ: %s", exc)
                 attempts = retry_attempts.get(message_key, 0) + 1
@@ -166,6 +180,7 @@ async def consume() -> None:
                 )
                 retry_attempts.pop(message_key, None)
                 await consumer.commit()
+                clear_context()
             except Exception as exc:
                 retry_attempts[message_key] = retry_attempts.get(message_key, 0) + 1
                 attempts = retry_attempts[message_key]
@@ -185,8 +200,10 @@ async def consume() -> None:
                     )
                     retry_attempts.pop(message_key, None)
                     await consumer.commit()
+                    clear_context()
                 else:
                     delay_seconds = min(60, 2**attempts)
+                    clear_context()
                     await asyncio.sleep(delay_seconds)
     except Exception as consume_error:
         logger.exception("Critical error in consumer loop: %s", consume_error)

@@ -356,3 +356,15 @@ docker compose logs -f api
 docker compose logs -f consumer  
 docker compose logs -f celery_worker  
 docker compose logs -f kafka
+
+---
+## Observability (минимум)
+
+- Структурированные JSON-логи включают поля `timestamp`, `level`, `service`, `request_id`, `correlation_id`, `event_id`, `order_id`, `user_id`.
+- Middleware прокидывает `X-Request-Id` и `X-Correlation-Id` (если они валидны UUID) и возвращает `X-Request-Id` в ответе.
+- Трассировка идёт по цепочке `HTTP -> outbox_event -> Kafka -> consumer -> Celery task`.
+- Метрики доступны по `GET /metrics` (HTTP, Kafka, outbox, DLQ, Celery, cache).
+- Healthcheck:
+  - `GET /liveness` — процесс жив
+  - `GET /readiness` — Postgres/Redis/Kafka доступны
+  - `GET /health` — общий статус

@@ -4,6 +4,7 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.config import settings
+from app.core.monitoring import CACHE_HIT_TOTAL, CACHE_MISS_TOTAL
 
 
 class CacheService:
@@ -18,7 +19,9 @@ class CacheService:
         """Получить заказ из кэша."""
         data = await self.redis.get(self.order_key(order_id))
         if not data:
+            CACHE_MISS_TOTAL.inc()
             return None
+        CACHE_HIT_TOTAL.inc()
         return json.loads(data)
 
     async def set_order(self, order_id: str, payload: dict[str, Any]) -> None:

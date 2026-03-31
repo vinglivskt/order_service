@@ -6,11 +6,17 @@ from typing import Any
 from sqlalchemy import func, select
 
 from app.core.config import settings
+from app.core.log_context import clear_context, set_event_context
+from app.core.monitoring import OUTBOX_PENDING_EVENTS
 from app.db.session import AsyncSessionLocal
 from app.messaging.producer import KafkaProducerService
 from app.models.outbox_event import OutboxEvent, OutboxStatus
+from app.core.structured_logging import setup_structured_logging
 
 logger = logging.getLogger(__name__)
+
+
+setup_structured_logging(service="outbox_publisher")
 
 
 class OutboxPublisherService:
@@ -79,7 +85,21 @@ class OutboxPublisherService:
                 if not events:
                     return
 
+                OUTBOX_PENDING_EVENTS.set(len(events))
+
                 for event in events:
+                    correlation_id = event.payload.get("correlation_id")
+                    request_id = event.payload.get("request_id")
+                    order_id = (
+                        event.payload.get("payload", {}).get("order_id")
+                        or event.payload.get("payload", {}).get("orderId")
+                    )
+                    set_event_context(
+                        event_id=str(event.id),
+                        order_id=str(order_id) if order_id else None,
+                        correlation_id=str(correlation_id) if correlation_id else None,
+                        request_id=str(request_id) if request_id else None,
+                    )
                     try:
                         await self._kafka_producer.send_order_event(event.payload)
                     except Exception as exc:
@@ -93,8 +113,10 @@ class OutboxPublisherService:
                             await self.send_to_dlq(event, str(exc))
                             event.status = OutboxStatus.FAILED
                             event.failed_at = self._now()
+                        clear_context()
                         continue
 
                     event.status = OutboxStatus.SENT
                     event.last_error = None
                     event.sent_at = self._now()
+                    clear_context()
