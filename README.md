@@ -134,6 +134,7 @@ docker compose up --build
 - `kafka` — Kafka broker
 - `kafka-init` — одноразовый контейнер для создания topic
 - `kafka-ui` — веб-интерфейс для Kafka
+- `web` — демо UI на React (Vite + TypeScript), раздача через nginx
 
 ### 5. Доступные адреса
 
@@ -142,7 +143,26 @@ docker compose up --build
 - API: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI schema: `http://localhost:8000/openapi.json`
+- Веб-клиент (React): `http://localhost:3000`
 - Kafka UI: `http://localhost:8070`
+
+### Веб-клиент (React)
+
+Каталог `frontend/` — демонстрационный UI для ручной проверки сценариев API (регистрация, JWT, создание заказа, список, получение по id, смена статуса) без Swagger.
+
+**Стек:** React 19, TypeScript, Vite 6. В Docker образ собирается в два этапа: `npm run build` в Node, затем статика из `dist/` копируется в nginx вместе с конфигом `frontend/nginx.conf`.
+
+**Прокси:** браузер обращается к API только по пути `/api/...` на том же хосте, что и UI. Nginx перенаправляет запросы на сервис `api` (`proxy_pass http://api:8000/`), поэтому отдельная настройка CORS для этого варианта не нужна.
+
+**Локальная разработка фронта** (API при этом должен слушать `localhost:8000`, например через `docker compose up` без `web` или весь compose):
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Vite откроет dev-сервер (по умолчанию порт **5173**) и проксирует `/api` на `http://127.0.0.1:8000` (см. `frontend/vite.config.ts`).
 
 ### 6. Остановка приложения
 
@@ -154,11 +174,12 @@ docker compose down
 
 ### 1. Проверка доступности Swagger
 
-После запуска можно запустить docker compose exec api pytest или пройтись руками:
+После запуска можно запустить `docker compose exec api pytest` или пройтись руками:
 
-http://localhost:8000/docs
+- Swagger: `http://localhost:8000/docs`
+- Либо веб-клиент на React: `http://localhost:3000` (те же сценарии через формы)
 
-Через Swagger можно последовательно проверить все основные сценарии.
+Через Swagger или UI можно последовательно проверить основные сценарии.
 
 ---
 
