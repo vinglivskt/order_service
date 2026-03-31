@@ -4,7 +4,7 @@ from typing import Any
 from aiokafka import AIOKafkaProducer
 
 from app.core.config import settings
-from app.core.monitoring import DLQ_COUNT, DLQ_METRICS, KAFKA_PUBLISHED_TOTAL
+from app.core.monitoring import DLQ_METRICS, KAFKA_PUBLISHED_TOTAL
 
 
 class KafkaProducerService:
@@ -43,7 +43,6 @@ class KafkaProducerService:
             payload,
         )
         DLQ_METRICS["total_messages"].inc()
-        DLQ_COUNT.inc()
         attempts = payload.get("attempts")
         if isinstance(attempts, int) and attempts > 0:
             DLQ_METRICS["retry_attempts"].inc()

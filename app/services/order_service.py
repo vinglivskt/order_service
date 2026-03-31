@@ -13,10 +13,11 @@ from app.models.outbox_event import OutboxEvent, OutboxStatus
 from app.schemas.order import SOrderCreate
 
 
+logger = logging.getLogger(__name__)
+
+
 class OrderService:
     """Сервис для работы с заказами."""
-
-logger = logging.getLogger(__name__)
 
     def __init__(self, db: AsyncSession):
         self.db = db

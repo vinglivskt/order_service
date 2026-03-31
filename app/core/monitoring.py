@@ -51,13 +51,6 @@ OUTBOX_PENDING_EVENTS = Gauge(
 )
 
 
-# DLQ расширение
-DLQ_COUNT = Counter(
-    "dlq_total_messages_total",
-    "Количество сообщений, отправленных в DLQ",
-)
-
-
 # Celery метрики
 CELERY_TASK_SUCCESS_TOTAL = Counter(
     "celery_task_success_total",
