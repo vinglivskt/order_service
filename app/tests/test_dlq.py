@@ -34,7 +34,9 @@ async def test_send_to_dlq(monkeypatch):
     test_payload = {"order_id": "test-123"}
     dummy_msg = _DummyMessage(test_payload)
     producer = _MockProducer()
-    await producer.send_to_dlq({"original_payload": dummy_msg.value, "error": "test error", "retry_count": 0})
+    await producer.send_to_dlq(
+        {"original_payload": dummy_msg.value, "error": "test error", "retry_count": 0}
+    )
 
     # 1. Payload, отправленный в DLQ, должен содержать оригинальные данные и ошибку
     assert captured["payload"]["original_payload"] == test_payload

@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,7 +15,6 @@ class Settings(BaseSettings):
 
     APP_NAME: str
     DEBUG: bool
-    API_V1_PREFIX: str
 
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
@@ -26,12 +24,14 @@ class Settings(BaseSettings):
     REDIS_URL: str
 
     KAFKA_BOOTSTRAP_SERVERS: str
-    KAFKA_TOPIC_NEW_ORDER: str
+    KAFKA_TOPIC_ORDER_EVENTS: str
+    KAFKA_TOPIC_ORDER_EVENTS_DLQ: str
+    OUTBOX_MAX_ATTEMPTS: int
 
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
 
-    CORS_ORIGINS: List[str]
+    CORS_ORIGINS: list[str]
     RATE_LIMIT_DEFAULT: str
     ORDERS_CACHE_TTL_SECONDS: int
     ENABLE_OUTBOX_PUBLISHER: bool = True

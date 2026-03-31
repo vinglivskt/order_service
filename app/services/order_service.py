@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -22,30 +24,37 @@ class OrderService:
 
     async def create_order(self, user_id: int, payload: SOrderCreate) -> Order:
         """Создать новый заказ."""
+        items = [item.model_dump() for item in payload.items]
         order = Order(
             user_id=user_id,
-            items=[item.model_dump() for item in payload.items],
-            total_price=self.calculate_total(
-                [item.model_dump() for item in payload.items]
-            ),
+            items=items,
+            total_price=self.calculate_total(items),
             status=OrderStatus.PENDING,
         )
         self.db.add(order)
+        await self.db.flush()
 
-        # Пишем событие в outbox в рамках той же транзакции БД.
-        # Это предотвращает потерю события, если Kafka временно недоступна.
-        self.db.add(
-            OutboxEvent(
-                event_type="new-order",
-                payload={
-                    "event": "new-order",
+        event_id = uuid.uuid4()
+        occurred_at = datetime.now(timezone.utc).isoformat()
+
+        outbox_event = OutboxEvent(
+            id=event_id,
+            event_type="order.created",
+            payload={
+                "event_id": str(event_id),
+                "event_type": "order.created",
+                "event_version": 1,
+                "occurred_at": occurred_at,
+                "correlation_id": None,
+                "request_id": None,
+                "payload": {
                     "order_id": str(order.id),
                     "user_id": user_id,
                 },
-                # Явное значение поддерживает предсказуемость вставки даже без server default.
-                status=OutboxStatus.PENDING,
-            )
+            },
+            status=OutboxStatus.PENDING,
         )
+        self.db.add(outbox_event)
 
         await self.db.commit()
         await self.db.refresh(order)

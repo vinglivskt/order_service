@@ -7,8 +7,8 @@
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # Идентификаторы ревизии, используемые Alembic.
 revision: str = "c7b2df9d4c1a"

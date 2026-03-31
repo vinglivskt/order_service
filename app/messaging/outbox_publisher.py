@@ -1,9 +1,11 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import func, select
 
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.messaging.producer import KafkaProducerService
 from app.models.outbox_event import OutboxEvent, OutboxStatus
@@ -12,17 +14,42 @@ logger = logging.getLogger(__name__)
 
 
 class OutboxPublisherService:
-    async def send_to_dlq(self, payload: dict) -> None:
-        """Send message to Dead Letter Queue."""
-        logger.warning("Sending message to DLQ: %s", payload)
-        await self._kafka_producer.send_new_order(payload)
-
     """Слушает очередь outbox и публикует события в Kafka."""
 
     def __init__(self, kafka_producer: KafkaProducerService) -> None:
         self._kafka_producer = kafka_producer
 
-    async def run(self, poll_interval_seconds: float = 1.0, batch_size: int = 10) -> None:
+    @staticmethod
+    def _now() -> datetime:
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _get_retry_delay_seconds(attempt: int) -> int:
+        return min(60, 2**attempt)
+
+    async def send_to_dlq(self, event: OutboxEvent, error_message: str) -> None:
+        """Отправить сообщение в отдельный DLQ topic после исчерпания retry."""
+        payload: dict[str, Any] = {
+            "failed_at": self._now().isoformat(),
+            "error": error_message,
+            "attempts": event.attempts,
+            "source_event_id": str(event.id),
+            "source_event_type": event.event_type,
+            "original_event": event.payload,
+        }
+        logger.warning(
+            "Sending event to DLQ",
+            extra={
+                "event_id": str(event.id),
+                "event_type": event.event_type,
+                "attempts": event.attempts,
+            },
+        )
+        await self._kafka_producer.send_dlq_event(payload)
+
+    async def run(
+        self, poll_interval_seconds: float = 1.0, batch_size: int = 10
+    ) -> None:
         while True:
             try:
                 await self.publish_pending(batch_size=batch_size)
@@ -40,7 +67,6 @@ class OutboxPublisherService:
                     select(OutboxEvent)
                     .where(
                         OutboxEvent.status == OutboxStatus.PENDING,
-                        OutboxEvent.event_type == "new-order",
                         OutboxEvent.next_attempt_at <= now_expr,
                     )
                     .order_by(OutboxEvent.created_at.asc())
@@ -55,22 +81,20 @@ class OutboxPublisherService:
 
                 for event in events:
                     try:
-                        await self._kafka_producer.send_new_order(event.payload)
+                        await self._kafka_producer.send_order_event(event.payload)
                     except Exception as exc:
-                        # Сохраняем событие в outbox для повторной попытки.
                         event.attempts += 1
                         event.last_error = str(exc)
+                        event.next_attempt_at = self._now() + timedelta(
+                            seconds=self._get_retry_delay_seconds(event.attempts)
+                        )
 
-                        # Задержка для повторной попытки.
-                        delay_seconds = min(60, 2**event.attempts)
-                        event.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
-                        # Отправляем событие в DLQ после нескольких неудачных попыток
-                        if event.attempts >= 5:
-                            await self.send_to_dlq(event.payload)
-                            event.status = OutboxStatus("FAILED")
-                        else:
-                            continue
+                        if event.attempts >= settings.OUTBOX_MAX_ATTEMPTS:
+                            await self.send_to_dlq(event, str(exc))
+                            event.status = OutboxStatus.FAILED
+                            event.failed_at = self._now()
+                        continue
 
                     event.status = OutboxStatus.SENT
                     event.last_error = None
-                    event.sent_at = datetime.now(timezone.utc)
+                    event.sent_at = self._now()

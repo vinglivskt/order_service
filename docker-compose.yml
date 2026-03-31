@@ -171,7 +171,7 @@ services:
       kafka:
         condition: service_healthy
     entrypoint: >
-      bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --create --if-not-exists --topic new-order --partitions 1 --replication-factor 1 --bootstrap-server kafka:9092 && echo 'Kafka topic new-order created'"
+      bash -c "/opt/bitnami/kafka/bin/kafka-topics.sh --create --if-not-exists --topic new-order --partitions 1 --replication-factor 1 --bootstrap-server kafka:9092 && /opt/bitnami/kafka/bin/kafka-topics.sh --create --if-not-exists --topic order-events --partitions 1 --replication-factor 1 --bootstrap-server kafka:9092 && /opt/bitnami/kafka/bin/kafka-topics.sh --create --if-not-exists --topic order-events-dlq --partitions 1 --replication-factor 1 --bootstrap-server kafka:9092 && echo 'Kafka topics created'"
     networks:
       - kafka-network
 

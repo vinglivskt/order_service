@@ -4,7 +4,14 @@ from app.tasks.celery_app import celery_app
 
 
 @celery_app.task(name="app.tasks.order_tasks.process_order")
-def process_order(order_id: str) -> None:
+def process_order(
+    order_id: str,
+    event_id: str | None = None,
+    event_type: str | None = None,
+    correlation_id: str | None = None,
+) -> None:
     """Обработать заказ."""
     time.sleep(2)
-    print(f"Order {order_id} processed")
+    print(
+        f"Order {order_id} processed (event_id={event_id}, event_type={event_type}, correlation_id={correlation_id})"
+    )
