@@ -39,7 +39,10 @@
 - При ошибке отправки Publisher увеличивает `attempts`, выставляет `next_attempt_at` по exponential backoff и повторяет попытку до `OUTBOX_MAX_ATTEMPTS`.
 - После исчерпания попыток Publisher отправляет данные события в DLQ topic `order-events-dlq` и переводит запись в `status=FAILED`.
 - Отдельный `consumer` подписывается на `order-events`, валидирует envelope и запускает Celery task `process_order` (передает как минимум `order_id` и `event_id`).
-- Невалидные сообщения (ошибки валидации envelope в `consumer`) отправляются в `order-events-dlq` с причиной.
+- Для каждого успешно обработанного события `consumer` записывает запись в таблицу `processed_events` (модель `ProcessedEvent`) по ключу `event_id` — это даёт идемпотентность при повторной доставке (дубли по `event_id` игнорируются).
+- Kafka offset коммитится только после успешной записи в `processed_events` (для новых событий) — это даёт at-least-once доставку + безопасный replay.
+- При ошибках сериализации JSON или валидации envelope (`event_id`, `order_id` и т.п.) событие считается poison и отправляется в `order-events-dlq` с текстом ошибки и оригинальным payload.
+- При системных ошибках в процессе обработки `consumer` делает несколько попыток с exponential backoff (до `OUTBOX_MAX_ATTEMPTS`), после чего также отправляет событие в `order-events-dlq`.
 
 #### 2.4 Redis (Кеширование заказов)
 
