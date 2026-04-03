@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str]
     RATE_LIMIT_DEFAULT: str
     ORDERS_CACHE_TTL_SECONDS: int
+    AUTH_USER_CACHE_TTL_SECONDS: int
     ENABLE_OUTBOX_PUBLISHER: bool = True
 
     @field_validator("CORS_ORIGINS", mode="before")

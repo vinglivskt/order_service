@@ -12,6 +12,7 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import SToken, SUserRead, SUserRegister
+from app.services.auth_cache_service import AuthCacheService
 
 router = APIRouter(tags=["auth"])
 
@@ -49,6 +50,7 @@ async def register_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    await AuthCacheService(request.app.state.redis).set_user(user.id, user.is_active)
     return SUserRead.model_validate(user)
 
 
@@ -73,4 +75,5 @@ async def login_for_access_token(
         subject=str(user.id),
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    await AuthCacheService(request.app.state.redis).set_user(user.id, user.is_active)
     return SToken(access_token=access_token)
